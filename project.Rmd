@@ -5,13 +5,16 @@ date: "02/02/2021"
 output: pdf_document
 ---
 
+# I. Exploratory Analysis
+## 1. Load Data
 ```{r}
 library(tidyverse)
 library(car)
-library(ggplot)
+library(ggplot2)
 library(readxl)
 
 listings <- read_excel("9_Dec_2019_Listings.xlsx")
 summary(listings)
 ```
 
+# II. Data Analysis
