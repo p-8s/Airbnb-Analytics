@@ -1,3 +1,11 @@
+---
+title: "ST309_Project"
+author: "Paxton Quek, Patricia Yin"
+date: "02/02/2021"
+output: pdf_document
+---
+
+```{r}
 library(tidyverse)
 library(car)
 library(ggplot)
@@ -5,3 +13,5 @@ library(readxl)
 
 listings <- read_excel("9_Dec_2019_Listings.xlsx")
 summary(listings)
+```
+
