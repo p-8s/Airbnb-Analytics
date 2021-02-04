@@ -21,7 +21,7 @@ listings1$cleaning_fee[is.na(listings1$cleaning_fee)]=0
 
 # Add a new column with normalised prices (pro-rata per person for a 3-day stay)
 # this is to account for the cleaning_fee, which can be substantial
-listings1$price_n <- with(listings1,(price*3 + cleaning_fee)/3/accommodates)
+listings1$price_n <- with(listings1,(price*3 + cleaning_fee)/3/guests_included)
 
 ```
 
