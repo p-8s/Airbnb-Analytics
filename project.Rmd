@@ -13,8 +13,8 @@ library(car)
 library(ggplot2)
 library(readxl)
 
-listings <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
-summary(listings)
+listings1 <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
+summary(listings1)
 
 # Standardise all cleaning_fee such that entries with "NA" are 0 
 listings1$cleaning_fee[is.na(listings1$cleaning_fee)]=0
@@ -22,6 +22,8 @@ listings1$cleaning_fee[is.na(listings1$cleaning_fee)]=0
 # Add a new column with normalised prices (pro-rata per person for a 3-day stay)
 # this is to account for the cleaning_fee, which can be substantial
 listings1$price_n <- with(listings1,(price*3 + cleaning_fee)/3/guests_included)
+
+
 
 ```
 
