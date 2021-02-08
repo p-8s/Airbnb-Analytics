@@ -91,4 +91,14 @@ listings1 <- listings1[!is.na(listings1$host_since),]
 
 By randomly checking five of the listings, the information about host is actually available on Airbnb. We believe the NA in the dataset might be due to some technical issues. Removing them from the dataset will not introduce significant bias. 
 
+## 8. host verification
+
+```{r}
+host_vn <- listings1$host_verifications
+sample(host_vn, 10)
+
+length(host_vn[1])
+```
+
+
 # II. Data Analysis
