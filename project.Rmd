@@ -8,13 +8,20 @@ output: pdf_document
 # I. Exploratory Analysis
 ## 1. Load Data
 ```{r}
+#setwd("~/Documents/好好学习！/R/ST309/st309-project")
 library(tidyverse)
 library(car)
 library(ggplot2)
 library(readxl)
 
 listings1 <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
+listings_o <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
 summary(listings1)
+
+```
+
+## 2. Price
+```{r}
 
 # Standardise all cleaning_fee such that entries with "NA" are 0 
 listings1$cleaning_fee[is.na(listings1$cleaning_fee)]=0
@@ -26,5 +33,62 @@ listings1$price_n <- with(listings1,(price*3 + cleaning_fee)/3/guests_included)
 
 
 ```
+
+## 3. host_since
+```{r}
+#host_since 
+host_since_n <- listings1$host_since
+
+#change host_since to years of operating, round up/down to nearest year
+host_since_n <- as.numeric(round((as.Date("2020-02-08", format = "%Y-%m-%d") - as.Date(host_since_n, format = "%Y-%m-%d"))/365))
+
+listings1$host_since <- host_since_n
+```
+
+## 4. host_response_time
+```{r}
+host_response_time_n <- as.factor(listings1$host_response_time)
+#combine NA and N/A as N/A because this level might be significant in further analysis.
+host_response_time_n[is.na(host_response_time_n)] <- "N/A"
+listings1$host_response_time <- host_response_time_n
+```
+
+## 5. host_response_rate
+```{r}
+host_response_rate_n <- as.numeric(listings1$host_response_rate)
+hist(host_response_rate_n)
+summary(host_response_rate_n)
+#recode the variable as factor: 100% is one level, not 100% another, NA the third
+host_response_rate_n[host_response_rate_n != 1] <- "Not100"
+host_response_rate_n[host_response_rate_n == 1] <- "100"
+host_response_rate_n[is.na(host_response_rate_n)] <- "N/A"
+host_response_rate_n <- as.factor(host_response_rate_n)
+listings1$host_response_rate <- host_response_rate_n
+```
+
+## 6. host_is_superhost
+```{r}
+summary(as.factor(listings1$host_is_superhost))
+#note that host_response_time has 944 NA, host_response_rate has 944 NA, host_is_superhost has 944 NA, investigation below
+```
+
+## 7. 944 entries w zero data for host
+
+```{r}
+#investigate:
+compare_1 <- listings_o$id[is.na(listings_o$host_response_time)] == listings_o$id[is.na(listings_o$host_response_rate)]
+length(compare_1[compare_1 == FALSE])
+compare_2 <- listings_o$id[is.na(listings_o$host_response_rate)] == listings_o$id[is.na(listings_o$host_is_superhost)]
+length(compare_2[compare_2 == FALSE])
+#it is the same listings which has NA for all three columns
+host_NA.dat <- subset(listings_o, is.na(host_response_rate))
+head(host_NA.dat)
+sample(host_NA.dat$id, size =3)
+#remove the 944 entries
+listings1 <- listings1[!is.na(listings1$host_since),]
+
+```
+
+By randomly checking five of the listings, the information about host is actually available on Airbnb. We believe the NA in the dataset might be due to some technical issues. Removing them from the dataset will not introduce significant bias. 
 
 # II. Data Analysis
