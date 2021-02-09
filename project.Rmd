@@ -14,6 +14,8 @@ library(car)
 library(ggplot2)
 library(readxl)
 library(stringr)
+library(rgdal)
+
 
 listings1 <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
 listings_o <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
@@ -43,7 +45,7 @@ host_since_n <- listings1$host_since
 #change host_since to years of operating, round up/down to nearest year
 host_since_n <- as.numeric(round((as.Date("2020-02-08", format = "%Y-%m-%d") - as.Date(host_since_n, format = "%Y-%m-%d"))/365))
 
-listings1$host_since <- host_since_n
+listings1$host_since_n <- host_since_n
 ```
 
 ## 4. host_response_time
@@ -51,7 +53,7 @@ listings1$host_since <- host_since_n
 host_response_time_n <- as.factor(listings1$host_response_time)
 #combine NA and N/A as N/A because this level might be significant in further analysis.
 host_response_time_n[is.na(host_response_time_n)] <- "N/A"
-listings1$host_response_time <- host_response_time_n
+listings1$host_response_time_n <- host_response_time_n
 ```
 
 ## 5. host_response_rate
@@ -64,7 +66,7 @@ host_response_rate_n[host_response_rate_n != 1] <- "Not100"
 host_response_rate_n[host_response_rate_n == 1] <- "100"
 host_response_rate_n[is.na(host_response_rate_n)] <- "N/A"
 host_response_rate_n <- as.factor(host_response_rate_n)
-listings1$host_response_rate <- host_response_rate_n
+listings1$host_response_rate_n <- host_response_rate_n
 ```
 
 ## 6. host_is_superhost
@@ -97,10 +99,12 @@ By randomly checking five of the listings, the information about host is actuall
 ```{r}
 host_vn <- listings1$host_verifications
 
-#convert empty entry in host_verification to NA
+#convert empty entry in host_verification to NA & save NA rows numbers
+NArows <- c()
 for (i in 1:length(host_vn)) {
   if (host_vn[i] == "[]") {
     host_vn[i] = NA
+    NArows <- c(NArows, i)
   }
 }
 
@@ -147,21 +151,46 @@ for (i in 1:length(host_vnClean)) {
   }
 }
 
-#attempts below
-host_vecSam <- host_vnNew[1:100,]
+#perform kmeans clustering
+km.out <- kmeans(host_vnNew, 4, nstart = 100)
+kmeans_results <- km.out$cluster
+kmeans_centroids <- km.out$centers
+for (i in 1:4) {print(length(which(cluster_results == i)))}
 
-nonNArows = !(is.na(host_vnClean))
-host_vecSam[,]
-km.out <- kmeans(host_vnNew, 4, nstart = 30)
-cluster_restults <- km.out$cluster
-cluster_feature <- km.out$centers
-
+listings1$host_verification_n <- kmeans_results
 ```
 
+## 9. street
 
 ```{r}
-host_ivn <- as.factor(listings1$host_identity_verified)
-summary(host_ivn)
+street_n <- as.factor(listings1$street)
+summary(street_n)
+#many do not have an exact street name, not considered further.
+```
+
+## 10. neighbourhood_cleansed
+
+```{r}
+neig_n <- as.factor(listings1$neighbourhood_cleansed)
+summary(neig_n)
+# no interesting transformation to think of
+```
+
+## 11. latitude and longitude
+
+```{r}
+location <- listings1[c("zipcode", "latitude", "longitude")]
+summary(location)
+min(location$latitude) #bottom = 51.29479 
+max(location$latitude) #top = 51.68169
+min(location$longitude) #left = -0.4966
+max(location$longitude) #right = 0.285
+
+london_wards <- readOGR(dsn = "London-wards/London_Ward.shp")
+london_wards_f <- fortify(london_wards)   
+london_wards$id <- row.names(london_wards)  
+head(london_wards_f)
+ggplot(london_wards_f, aes(long, lat, group = group)) + geom_polygon()
 ```
 
 
