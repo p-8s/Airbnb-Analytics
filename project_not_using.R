@@ -25,5 +25,8 @@ summary(listings2$review_scores_rating)
 length(which(listings2$review_scores_rating > 95)) # 
 dim(listings2)
 summary(lm1)
-# reviews_per_month
+
+summary(listings1$reviews_per_month)
+hist(listings1$reviews_per_month)
+# reviews_per_month > 8 
 # number_of_reviews_ltm
