@@ -13,6 +13,7 @@ library(tidyverse)
 library(car)
 library(ggplot2)
 library(readxl)
+library(stringr)
 
 listings1 <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
 listings_o <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
@@ -95,9 +96,62 @@ By randomly checking five of the listings, the information about host is actuall
 
 ```{r}
 host_vn <- listings1$host_verifications
-sample(host_vn, 10)
 
-length(host_vn[1])
+#convert empty entry in host_verification to NA
+for (i in 1:length(host_vn)) {
+  if (host_vn[i] == "[]") {
+    host_vn[i] = NA
+  }
+}
+
+#split word entries in the host_verification
+host_vnList <- strsplit(host_vn, split =",")
+
+#clean host_vn by removing the signs 
+remove.sign <- function (df) {
+  str_replace_all(df, "[^[:alnum:]]", "")
+  }
+host_vnClean <- lapply(host_vnList, remove.sign)
+
+#code the name of each list in the list of lists using their rownumber
+names(host_vnClean) <- 1:length(host_vnClean)
+#this is a precaution to deal with messed up row numbers after removing NAs
+
+#get a list of all possible methods
+getAllMethods <- function (LOL) {
+  methods <- c()
+  checks <- c()
+  for (i in 1:length(LOL)) {
+    for (j in 1:length(LOL[[i]])) {
+      if (!(LOL[[i]][j] %in% methods)) {
+        methods <- c(methods, LOL[[i]][j])
+      }
+    }
+  }
+  return(methods)
+}
+
+#NA is removed from the verification methods list
+methods <- getAllMethods(host_vnClean)[1:20]
+
+
+#take each method as a dimension, recode host_vnClean to a list of vectors
+host_vnNew = matrix(0, ncol = length(methods),nrow = length(host_vnClean))
+colnames(host_vnNew) <- methods
+  for (i in 1:length(host_vnClean))
+    for (m in 1:length(methods)) {
+      if (methods[m] %in% host_vnClean[[i]]) {
+        host_vnClean[[i]]
+      }
+    
+    }
+
+```
+
+
+```{r}
+host_ivn <- as.factor(listings1$host_identity_verified)
+summary(host_ivn)
 ```
 
 
