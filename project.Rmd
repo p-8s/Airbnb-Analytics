@@ -15,12 +15,12 @@ library(ggplot2)
 library(readxl)
 library(stringr)
 library(rgdal)
-
+library(dplyr)
+library(data.table)
 
 listings1 <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
 listings_o <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
 summary(listings1)
-
 ```
 
 ## 2. Price
@@ -205,4 +205,91 @@ listings1$mil_to_centre_n <- mil_to_centre_n
 
 [1]  https://toboroughsdatascience.com/plotting-a-map-of-london-crime-data-using-r-8dcefef1c397 the reference for transformation of coordinates to longitude and latitude
 [2]  https://www.latlong.net/place/london-the-uk-14153.html centre of london longitude and latitude
+
+## 12. is_location_exact
+```{r}
+listings1$is_location_exact <- summary(as.factor(listings1$is_location_exact))
+```
+
+## 13. property
+```{r}
+#group the more expensive properties as one level
+summary(as.factor(listings1$property_type))
+```
+
+## 14. room types
+
+```{r}
+summary(as.factor(listings1$room_type))
+listings1$room_type <- as.factor(listings1$room_type)
+```
+
+
+## 15. bed types
+
+```{r}
+summary(as.factor(listings1$bed_type))
+#change to real bed and non real bed as other categories have too few data
+bed_type_n <- listings1$bed_type
+bed_type_n[bed_type_n != "Real Bed"] <- "Non Bed"
+summary(as.factor(bed_type_n))
+listings1$bed_type_n <- as.factor(bed_type_n)
+```
+
+## 16. amenities
+
+```{r}
+amenities_n <- listings1$amenities
+head(amenities_n)
+amenities_list <- strsplit(amenities_n, ",")
+head(amenities_list)
+#clean amenities list
+remove.punc <- function(mylist) {str_remove_all(mylist, "[:punct:]")}
+a_clean_list <- lapply(amenities_list, remove.punc)
+#find all possible items provided
+raw_items <- getAllMethods(a_clean_list)
+
+getMethodFreq <- function (LOL, item_list){
+  
+  freq_list <- matrix(0, nrow = length(item_list), ncol = 1)
+  rownames(freq_list) <- item_list
+  colnames(freq_list) <- "freq"
+  
+  for (m in 1:length(item_list)) {
+    count = 0
+    for (i in 1:length(LOL)) {
+      if (item_list[m] %in% LOL[[i]]) {
+        count = count + 1
+      }
+    freq_list[m][1] = count
+    }
+  }
+  return (freq_list)
+}
+
+#get the frequency that each item appears
+item_freq <- getMethodFreq(a_clean_list, raw_items)
+
+item_freq <- as.data.frame(item_freq)
+item_freq <- rownames_to_column(item_freq, "item")
+item_freq <- item_freq[order(item_freq$freq, decreasing = T),]
+
+
+as.data.frame(a[order(a, decreasing =T),])
+#some attempts
+a_clean_sam <- a_clean_list[1:10]
+
+items
+
+unlist(amenities_list[[6]])
+str_extract_all(amenities_list[[6]], "\\\".+")
+
+```
+
+
+
+
+
+
+
 # II. Data Analysis
