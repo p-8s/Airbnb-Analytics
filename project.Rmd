@@ -182,19 +182,27 @@ summary(neig_n)
 lis_location <- listings1[c("zipcode", "latitude", "longitude")]
 summary(lis_location)
 
-#load the shapefile of london wards
-london_wards <- readOGR(dsn = "London-wards/London_Ward.shp") #the whole london-wards folder must be downloaded because .shp (shapefile) is composed by different files in the folder.
-#transform the coordinates to longitude and latitude [1]
-proj4string(london_wards) <- CRS("+init=epsg:27700")
-london_wards.wgs84 <- spTransform(london_wards, CRS("+init=epsg:4326"))
-  
-head(london_wards_f)
-#plot map
-map1 <- ggplot() + geom_polygon(data=london_wards.wgs84, mapping=aes(long, lat, group = group), fill="lightskyblue3") + geom_path(data=london_wards.wgs84, mapping=aes(long, lat, group = group), color="white", lwd=0.1)
+#load the shapefile of london boroughs
+ldn_boroughs <- readOGR(dsn = "London-boroughs/London_Borough_Excluding_MHW.shp") #the whole london-boroughs folder must be downloaded because .shp (shapefile) is composed by different files in the folder.
+#transform the coordinates to longitude and latitude
+proj4string(ldn_boroughs) <- CRS("+init=epsg:27700")
+ldn_boroughs.wgs84 <- spTransform(ldn_boroughs, CRS("+init=epsg:4326"))
 
-map2 <- map1 + geom_point(data=lis_location, mapping=aes(longitude, latitude), color = "dimgrey", size=0.05) + ggtitle("Airbnb listings in London")
+#plot map with listings data
+map1 <- ggplot() + geom_polygon(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group, fill = group)) + geom_path(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), color="white", lwd=0.1)
+#map1 <- ggplot() + geom_polygon(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), fill="dimgrey") + geom_path(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), color="white", lwd=0.1)
+map2 <- map1 + geom_point(data=lis_location, mapping=aes(longitude, latitude), color = "dimgrey", size=0.05) + ggtitle("Airbnb listings in London") + theme(legend.position = "none")
+
+#transform location data to distance to central london
+cent_ldn_lat <- 51.509865
+cent_ldn_long <- -0.118092
+
+mil_to_centre_n <- sqrt(((lis_location$longitude - cent_ldn_long)*54.6)^2 + ((lis_location$latitude - cent_ldn_lat)*69)^2)
+summary(mil_to_centre_n)
+
+listings1$mil_to_centre_n <- mil_to_centre_n
 ```
 
-[1]  https://towardsdatascience.com/plotting-a-map-of-london-crime-data-using-r-8dcefef1c397 the reference for transformation of coordinates to longitude and latitude
-
+[1]  https://toboroughsdatascience.com/plotting-a-map-of-london-crime-data-using-r-8dcefef1c397 the reference for transformation of coordinates to longitude and latitude
+[2]  https://www.latlong.net/place/london-the-uk-14153.html centre of london longitude and latitude
 # II. Data Analysis
