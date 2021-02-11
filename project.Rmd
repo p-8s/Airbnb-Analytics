@@ -211,10 +211,29 @@ listings1$mil_to_centre_n <- mil_to_centre_n
 listings1$is_location_exact <- summary(as.factor(listings1$is_location_exact))
 ```
 
-## 13. property
+## 13. property type
 ```{r}
-#group the more expensive properties as one level
-summary(as.factor(listings1$property_type))
+#check price difference among different types (original)
+property_n2 <- listings1$property_type
+prop_o_price <- as.data.frame(cbind(property_n2, listings1$price_n))
+prop_o_price$price_n <- as.numeric(prop_price$V2)
+ggplot(data=prop_o_price, aes(x=factor(property_n2), y=log(price_n)))+geom_boxplot()
+
+#group levels according to common understanding of room types
+property_n <- listings1$property_type
+summary(as.factor(property_n))
+property_n[property_n == "Aparthotel" |  property_n == "Loft" | property_n == "Serviced apartment"] <- "Apartment"
+property_n[property_n == "Bungalow" |property_n == "Cottage" | property_n == "Tiny house" | property_n == "Townhouse" ] <- "House"
+property_n[property_n == "Villa"] <- "Condominium"
+property_n[property_n != "Apartment" & property_n != "House" & property_n != "Condominium"] <- "Others"
+
+#check price difference among different types
+prop_price <- as.data.frame(cbind(property_n, listings1$price_n))
+prop_price$price_n <- as.numeric(prop_price$V2)
+ggplot(data=prop_price, aes(x=factor(property_n), y=log(price_n)))+geom_boxplot()
+mean(prop_price$price[prop_price$property_n == "Apartment"])
+
+listings1$property_type_n <- property_n
 ```
 
 ## 14. room types
@@ -364,6 +383,38 @@ conclusion 1: the ten most frequently appeared amenities for listings on Airbnb:
 
 conclusion 2: superhosts tend to provide more amenities than non-superhosts
 
+## 17. cancellation_policy
+
+```{r}
+cancel_n <- as.factor(listings1$cancellation_policy)
+summary(cancel_n)
+cancel_n[cancel_n != "flexible" & cancel_n != "moderate"] <- "strict"
+cancel_n <- droplevels(cancel_n)
+listings1$cancellation_policy_n <- cancel_n
+```
+
+Note: within level "strict", 23574 out of 23897 are "strict_14_with_grace_period". The others levels were merged into strict because they have very small presence.
+
+## 18. guest verification
+
+```{r}
+summary(listings1$guest_pp_n) #628 t
+
+summary(as.factor(listings1$require_guest_phone_verification)) #999 t
+
+#check rlship between phone_verifcation and profile-pic-verif
+length(which(listings1$require_guest_profile_picture == "t" & listings1$require_guest_phone_verification == "t")) #557 t
+```
+
+557 listings require both phone and profile pic verifications
+628-557 require only phone
+999-557 require only profile pic
+
+## 
+
+```{r}
+
+```
 
 
 # II. Data Analysis
