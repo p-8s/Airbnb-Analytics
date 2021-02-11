@@ -243,14 +243,30 @@ amenities_n <- listings1$amenities
 head(amenities_n)
 amenities_list <- strsplit(amenities_n, ",")
 head(amenities_list)
+
 #clean amenities list
 remove.punc <- function(mylist) {str_remove_all(mylist, "[:punct:]")}
 a_clean_list <- lapply(amenities_list, remove.punc)
+
+
+#plot histogram of no. of amenities for listings
+total_amenities <- as.numeric(summary(a_clean_list)[,1])
+hist(total_amenities, 
+     main = "Histogram of no. of amenities for listings",
+     xlab = "Number of amenities",
+     ylab = "Number of listings")
+
+#check relationship between no. of total amenities and host_is_superhost
+total_sup <- as.data.frame(cbind(total_amenities, listings1$host_is_superhost))
+total_sup$total_amenities <- as.numeric(total_sup$total_amenities)
+total_sup$V2 <- as.factor(total_sup$V2)
+boxplot(total_sup$total_amenities ~ total_sup$V2)
+
 #find all possible items provided
 raw_items <- getAllMethods(a_clean_list)
 
+#find the frequency that each item appears
 getMethodFreq <- function (LOL, item_list){
-  
   freq_list <- matrix(0, nrow = length(item_list), ncol = 1)
   rownames(freq_list) <- item_list
   colnames(freq_list) <- "freq"
@@ -269,26 +285,84 @@ getMethodFreq <- function (LOL, item_list){
 
 #get the frequency that each item appears
 item_freq <- getMethodFreq(a_clean_list, raw_items)
-
 item_freq <- as.data.frame(item_freq)
 item_freq <- rownames_to_column(item_freq, "item")
 item_freq <- item_freq[order(item_freq$freq, decreasing = T),]
 
 
-as.data.frame(a[order(a, decreasing =T),])
-#some attempts
-a_clean_sam <- a_clean_list[1:10]
+#count the number of items provided by listings that are among the top N amenities
+countTopN <- function (LOL, topN) {
+  count_matrix = matrix(NA, nrow = length(LOL), ncol = 1)
+    
+  for (i in 1:length(LOL)) {
+    count = 0
+    for (m in 1:length(topN)) {
+      if (topN[m] %in% LOL[[i]]) {count = count + 1}
+    }
+    count_matrix[i][1] = count
+  }
+  
+  return(count_matrix)
+}
 
-items
+#(1)check top 20 amenities: count, distribution, relationship to host_is_superhost
+top20amen <- item_freq$item[1:20]
+top20_count_matrix <- countTopN(a_clean_list, top20amen)
+head(top20_count_matrix)
 
-unlist(amenities_list[[6]])
-str_extract_all(amenities_list[[6]], "\\\".+")
+##(1.2)distribution
+hist(top20_count_matrix[,1])
 
+##(1.3)rship between no. of items in top20 amenities and host_is_superhost
+top20_sup <- as.data.frame(cbind(top20_count_matrix, listings1$host_is_superhost))
+colnames(top20_sup) <- c("top20_count", "is_superhost")
+top20_sup$top20_count <- as.numeric(top20_sup$top20_count)
+top20_sup$is_superhost <- as.factor(top20_sup$is_superhost)
+boxplot(top20_sup$top20_count ~ top20_sup$is_superhost) 
+t.test(top20_count ~ is_superhost, data = top20_sup) #difference between two levels: significant
+
+#(2)check top 10 amenities:
+top10amen <- item_freq$item[1:10]
+top10_count_matrix <- countTopN(a_clean_list, top10amen)
+head(top10_count_matrix)
+
+##(2.2)distribution
+hist(top10_count_matrix[,1])
+
+##(2.3)rship between no. of items in top10 amenities and host_is_superhost
+top10_sup <- as.data.frame(cbind(top10_count_matrix, listings1$host_is_superhost))
+colnames(top10_sup) <- c("top10_count", "is_superhost")
+top10_sup$top10_count <- as.numeric(top10_sup$top10_count)
+top10_sup$is_superhost <- as.factor(top10_sup$is_superhost)
+boxplot(top10_sup$top10_count ~ top10_sup$is_superhost) #visually: not highly significant
+t.test(top10_count ~ is_superhost, data = top10_sup)
+
+#(3)check top 30 amenities:
+top30amen <- item_freq$item[1:30]
+top30_count_matrix <- countTopN(a_clean_list, top30amen)
+head(top30_count_matrix)
+
+##(3.2)distribution
+hist(top30_count_matrix[,1])
+
+##(3.3)rship between no. of items in top30 amenities and host_is_superhost
+top30_sup <- as.data.frame(cbind(top30_count_matrix, listings1$host_is_superhost))
+colnames(top30_sup) <- c("top30_count", "is_superhost")
+top30_sup$top30_count <- as.numeric(top30_sup$top30_count)
+top30_sup$is_superhost <- as.factor(top30_sup$is_superhost)
+boxplot(top30_sup$top30_count ~ top30_sup$is_superhost) #visually: not highly significant
+t.test(top30_count ~ is_superhost, data = top30_sup)
+
+#add new column to listings1
+listings1$amen_count <- total_amenities
 ```
 
+conclusion 1: the ten most frequently appeared amenities for listings on Airbnb:
+ [1] "Wifi"           "Essentials"     "Heating"        "Kitchen"       
+ [5] "Smoke detector" "Washer"         "Hangers"        "Iron"          
+ [9] "Hair dryer"     "Shampoo"      
 
-
-
+conclusion 2: superhosts tend to provide more amenities than non-superhosts
 
 
 
