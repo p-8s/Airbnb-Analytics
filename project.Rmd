@@ -72,6 +72,9 @@ listings1$host_response_rate_n <- host_response_rate_n
 ## 6. host_is_superhost
 ```{r}
 summary(as.factor(listings1$host_is_superhost))
+superhost_n <- as.factor(listings1$host_is_superhost)
+levels(superhost_n) <- c(F, T)
+listings1$superhost_n <- superhost_n
 #note that host_response_time has 944 NA, host_response_rate has 944 NA, host_is_superhost has 944 NA, investigation below
 ```
 
@@ -208,7 +211,7 @@ listings1$mil_to_centre_n <- mil_to_centre_n
 
 ## 12. is_location_exact
 ```{r}
-listings1$is_location_exact <- summary(as.factor(listings1$is_location_exact))
+summary(as.factor(listings1$is_location_exact))
 ```
 
 ## 13. property type
@@ -398,23 +401,106 @@ Note: within level "strict", 23574 out of 23897 are "strict_14_with_grace_period
 ## 18. guest verification
 
 ```{r}
-summary(listings1$guest_pp_n) #628 t
 
+summary(listings1$require_guest_profile_picture) #628 t
 summary(as.factor(listings1$require_guest_phone_verification)) #999 t
 
 #check rlship between phone_verifcation and profile-pic-verif
 length(which(listings1$require_guest_profile_picture == "t" & listings1$require_guest_phone_verification == "t")) #557 t
+
+#transform verification
+guest_verif <- as.data.frame(cbind(listings1$require_guest_profile_picture, listings1$require_guest_phone_verification, 0))
+colnames(guest_verif) <- c("profil_pic", "phone", "any_form")
+for (i in 1:nrow(guest_verif)) {
+  if (guest_verif$profil_pic[i] == "t" | guest_verif$phone[i] == "t") {
+    guest_verif$any_form[i] <- T
+  } else {guest_verif$any_form[i] <- F}
+}
+summary(as.factor(guest_verif$any_form))
+
+listings1$guest_verif_n <- as.factor(guest_verif$any_form)
 ```
 
 557 listings require both phone and profile pic verifications
 628-557 require only phone
 999-557 require only profile pic
 
-## 
-
-```{r}
-
-```
-
 
 # II. Data Analysis
+
+## 1. model with all relevant variables
+
+```{r}
+#subset to include only the relevant ones
+colnames(listings1)
+relevant_col = c("price_n", "host_since_n", "host_response_time_n", "host_response_rate_n", "host_verification_n", "mil_to_centre_n", "property_type_n", "bed_type_n", "amen_count", "cancellation_policy_n", "guest_verif_n", "room_type", "superhost_n", "accommodates","minimum_nights", "reviews_per_month", "review_scores_rating")
+listings2 <- listings1[,relevant_col]
+summary(listings2)
+```
+
+Response variable: host_is_superhost
+
+Remove apparently non-relevant columns: id, host_id, host_name, 
+
+Remove not suitable ones: 
+1. host_about: (more detailed text analysis in the later section)
+2. host_listings_count / host_total_listings_count : we are interested in how to price a listing and (how to improve a listing in order to become a superhost). this variable is not directly relevant.  
+3. "bathrooms", "bedrooms", "beds", guests_included, extra_people: they are correlates to how many people accommodated
+4. calculated_host_listings_count
+calculated_host_listings_count_entire_homes
+calculated_host_listings_count_private_rooms
+calculated_host_listings_count_shared_rooms: (not relevant?)
+
+Select one variable to represent similar variables:
+1. {host verification_n: host_verification, host_has_profile_pic, host_identity_verified}
+2. location {mil_to_centre_n: host_location, street, neighbourhood_cleansed, city, zipcode, smart_location, latitude, longitude, is_location_exact}
+4. price {price_n: price, weekly_price, security_deposit, cleaning_fee, }
+5. no of reviews {reviews_per_month: number_of_reviews_ltm, number_of_reviews}
+6. reviews rating {review_scores_rating: review_scores_rating, review_scores_accuracy, review_scores_cleanliness, review_scores_checkin, review_scores_communication, review_scores_location, review_scores_value}
+6. guest verif {guest_verif_n: require_guest_profile_picture,  require_guest_phone_verification}
+
+```{r}
+logi.m1 <- glm(superhost_n~., family = binomial(link = "logit"), data = listings2)
+summary(logi.m1)
+ct.op <- function(predicted, observed) {
+  df.op <- data.frame(predicted = predicted, observed = observed)
+  # create a table
+  op.tab <- table(df.op)
+  1
+  # use the prop.table function to obtain the rows we need and stack them on
+  # top of each other with rbind
+  op.tab <- rbind(op.tab, c(round(prop.table(op.tab, 2)[1, 1], 2), round((prop.table(op.tab, 2)[2, 2]), 2)))
+  # name the rows
+  rownames(op.tab) <- c("pred=0", "pred=1", "%corr")
+  # name the columns
+  colnames(op.tab) <- c("obs=0", "obs=1")
+  # return the table
+  op.tab
+}
+
+
+pred.pk<-as.numeric(logi.m1$fitted.values>0.5)
+which(is.na(listings2$reviews_per_month)) #
+
+#pass the fitted values and the observed values to ct.op
+ct.op(pred.pk,listings2$superhost_n[-c(14100, 22677)])
+```
+
+too many signals for non superhost but too few for superhosts?
+
+```{r }
+# summary(listings2$superhost_n)
+# listings_T <- listings2[superhost_n == T,]
+# listings_F <- listings2[superhost_n == F,]
+# Fsam_index <- sample(dim(listings_F)[1], size = dim(listings_F)[1])
+# listings_Fsam <- listings_F[Fsam_index,]
+# 
+# listings_bal <- rbind(listings_T, listings_Fsam)
+# 
+# logi.m2 <- glm(superhost_n~., family = binomial(link = "logit"), data = listings_bal)
+# summary(logi.m2)
+# 
+# pred.m2<-as.numeric(logi.m2$fitted.values>0.5)
+# ct.op(pred.m2,listings2$superhost_n)
+```
+
