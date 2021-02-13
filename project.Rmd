@@ -209,29 +209,34 @@ lis_location <- listings1[c("zipcode", "latitude", "longitude", "host_is_superho
 lis_location$host_is_superhost <- as.factor(lis_location$host_is_superhost)
 summary(lis_location)
 
-##(11.1) map one: visualise listings on map of london boroughs
 #load the shapefile of london boroughs
 ldn_boroughs <- readOGR(dsn = "London-boroughs/London_Borough_Excluding_MHW.shp") #the whole london-boroughs folder must be downloaded because .shp (shapefile) is composed by different files in the folder.
 #transform the coordinates to longitude and latitude
 proj4string(ldn_boroughs) <- CRS("+init=epsg:27700")
 ldn_boroughs.wgs84 <- spTransform(ldn_boroughs, CRS("+init=epsg:4326"))
-
-#plot map with listings data
-map1 <- ggplot() + geom_polygon(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group, fill=group)) + geom_path(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group=group), color="white", lwd=0.1)
-map2 <- map1 + geom_point(data=lis_location, mapping=aes(longitude, latitude), color="dimgrey", size=0.05) + ggtitle("Airbnb listings in London")
-map3 <- map2 + theme(legend.position = "none")
-
-##(11.2) map two: visualise percentage of superhosts on map of london boroughs
-ldn_boroughs.wgs84@data <- left_join(ldn_boroughs.wgs84@data, neig_l_s, by = c("name" = "neighbourhood"))
+#add a column of id for matching with dataframe containing borough name
 ldn_boroughs.wgs84$id <- row.names(ldn_boroughs.wgs84)
+
+##(11.1) map one: visualise percentage of superhosts on map of london boroughs
+#labels for polygons (boroughs), positioned at the centre of each polygon
+centroid.dat <- as.data.frame(coordinates(ldn_boroughs.wgs84))
+centroid.dat <- rownames_to_column(centroid.dat, "id")
+colnames(centroid.dat) <- c("id", "long", "lat")
+polygon_label.dat <- left_join(centroid.dat, ldn_boroughs.wgs84@data, by="id")
+
+#merge shapefile data with borough name data and count of listings / superhosts data
+ldn_boroughs.wgs84@data <- left_join(ldn_boroughs.wgs84@data, neig_l_s, by = c("NAME" = "neighbourhood"))
 ldn_boroughs_f <- fortify(ldn_boroughs.wgs84)
-ldn_boroughs_f <- left_join(ldn_boroughs_f, ldn_boroughs.wgs84@data, by = "id")
+ldn_boroughs_m <- left_join(ldn_boroughs_f, ldn_boroughs.wgs84@data, by = "id")
 
-map01 <- ggplot(data = ldn_boroughs_f, aes(long, lat, group=group, fill=perc_superhost.y)) + geom_polygon() + geom_path(colour="white", lwd=0.05) + coord_equal() + scale_fill_gradient2(low = "#BDBDBD",high = "#2196F3", name = "% of superhosts")
+map01 <- ggplot() + geom_polygon(data=ldn_boroughs_m, mapping=aes(long, lat, group=`NAME`, fill=`perc_superhost`)) + geom_path(color="white", lwd=0.1) + coord_equal() + scale_fill_gradient(high="#132B43", low="#56B1F7", name = "% of superhosts")
+map02 <- map01 + geom_text(data=polygon_label.dat, mapping=aes(x=long, y=lat, label=NAME), size=3) + ggtitle("Percentage of superhosts in each borough")
 
-map02 <- map01 + theme(legend.position = "none")
-
-
+##(11.2) map two: visualise listings on map of london boroughs
+#plot map with listings data
+map1 <- ggplot() + geom_polygon(data=ldn_boroughs_m, mapping=aes(long, lat, group = group, fill=NAME)) + geom_path(data=ldn_boroughs_m, mapping=aes(long, lat, group=group), color="white", lwd=0.1)
+map2 <- map1 + geom_point(data=lis_location, mapping=aes(longitude, latitude), color="dimgrey", size=0.05) + coord_equal() + ggtitle("Airbnb listings in London")
+map3 <- map2 + theme(legend.position = "none") #map without legend (names of borough)
 
 #transform location data to distance to central london
 cent_ldn_lat <- 51.509865
@@ -245,12 +250,13 @@ listings1$mil_to_centre_n <- mil_to_centre_n
 
 [1]  https://toboroughsdatascience.com/plotting-a-map-of-london-crime-data-using-r-8dcefef1c397 the reference for transformation of coordinates to longitude and latitude
 [2]  https://www.latlong.net/place/london-the-uk-14153.html centre of london longitude and latitude
-[3] https://github.com/valeria-io/crime_london_map (11.2) map 2
+[3] https://github.com/valeria-io/crime_london_map (11.2) map 1
 
-## code for maps with uniform colours
+- code for maps with uniform colours
+
 map0 <- ggplot() + geom_polygon(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), fill="skyblue2") + geom_path(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), color="white", lwd=0.1)
 map0.1 <- map0 + geom_point(data=lis_location, mapping=aes(longitude, latitude), color = "dimgrey", size=0.05) + ggtitle("Airbnb listings in London") + theme(legend.position = "none")
-##use shape names to represent t/f for superhost 
+
 
 ## 12. is_location_exact
 ```{r}
