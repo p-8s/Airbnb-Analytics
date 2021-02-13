@@ -211,9 +211,8 @@ summary(lis_location)
 
 ##(11.1) map one: visualise listings on map of london boroughs
 #load the shapefile of london boroughs
-ldn_boroughs0 <- readOGR(dsn = "London-boroughs/LondonBoroughs.shp") #the whole london-boroughs folder must be downloaded because .shp (shapefile) is composed by different files in the folder.
+ldn_boroughs <- readOGR(dsn = "London-boroughs/London_Borough_Excluding_MHW.shp") #the whole london-boroughs folder must be downloaded because .shp (shapefile) is composed by different files in the folder.
 #transform the coordinates to longitude and latitude
-ldn_boroughs <- ldn_boroughs0
 proj4string(ldn_boroughs) <- CRS("+init=epsg:27700")
 ldn_boroughs.wgs84 <- spTransform(ldn_boroughs, CRS("+init=epsg:4326"))
 
