@@ -155,10 +155,11 @@ for (i in 1:length(host_vnClean)) {
 }
 
 #perform kmeans clustering
+set.seed(130)
 km.out <- kmeans(host_vnNew, 4, nstart = 100)
 kmeans_results <- km.out$cluster
 kmeans_centroids <- km.out$centers
-for (i in 1:4) {print(length(which(cluster_results == i)))}
+for (i in 1:4) {print(length(which(kmeans_results == i)))}
 
 listings1$host_verification_n <- kmeans_results
 ```
@@ -175,26 +176,63 @@ summary(street_n)
 
 ```{r}
 neig_n <- as.factor(listings1$neighbourhood_cleansed)
-summary(neig_n)
-# no interesting transformation to think of
+neig_dat <- as.data.frame(summary(neig_n))
+neig_dat <- rownames_to_column(neig_dat)
+colnames(neig_dat) <- c("neighbourhood", "listings")
+
+#get the frequency of superhosts in each neighbourhood
+neig_superhost <- as.data.frame(cbind(listings1$neighbourhood_cleansed, listings1$host_is_superhost))
+colnames(neig_superhost) <- c("neighbourhood", "superhost") 
+neig_superhost[,c(1:2)] <- lapply(neig_superhost[,c(1:2)], as.factor)
+
+neig_sT <- neig_superhost$neighbourhood[neig_superhost$superhost == "t"]
+neig_T_dat <- as.data.frame(summary(neig_sT))
+neig_T_dat <- rownames_to_column(neig_T_dat)
+colnames(neig_T_dat) <- c("neighbourhood", "superhosts")
+
+#merge datasets for no. number of listings & no. of superhosts in each neighbourhood
+neig_l_s <- merge(neig_dat, neig_T_dat, by = "neighbourhood")
+neig_l_s$perc_superhost <- neig_l_s$superhosts / neig_l_s$listings
+
+#rank boroughs according to no. of listings
+n_sort_listings <- neig_l_s[order(neig_l_s$listings, decreasing = T),]
+#rank boroughs according to percentage of superhost
+n_sort_percsup <- neig_l_s[order(neig_l_s$perc_superhost, decreasing = T),]
+
+
 ```
 
 ## 11. latitude and longitude
 
 ```{r}
-lis_location <- listings1[c("zipcode", "latitude", "longitude")]
+lis_location <- listings1[c("zipcode", "latitude", "longitude", "host_is_superhost")]
+lis_location$host_is_superhost <- as.factor(lis_location$host_is_superhost)
 summary(lis_location)
 
+##(11.1) map one: visualise listings on map of london boroughs
 #load the shapefile of london boroughs
-ldn_boroughs <- readOGR(dsn = "London-boroughs/London_Borough_Excluding_MHW.shp") #the whole london-boroughs folder must be downloaded because .shp (shapefile) is composed by different files in the folder.
+ldn_boroughs0 <- readOGR(dsn = "London-boroughs/LondonBoroughs.shp") #the whole london-boroughs folder must be downloaded because .shp (shapefile) is composed by different files in the folder.
 #transform the coordinates to longitude and latitude
+ldn_boroughs <- ldn_boroughs0
 proj4string(ldn_boroughs) <- CRS("+init=epsg:27700")
 ldn_boroughs.wgs84 <- spTransform(ldn_boroughs, CRS("+init=epsg:4326"))
 
 #plot map with listings data
-map1 <- ggplot() + geom_polygon(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group, fill = group)) + geom_path(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), color="white", lwd=0.1)
-#map1 <- ggplot() + geom_polygon(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), fill="dimgrey") + geom_path(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), color="white", lwd=0.1)
-map2 <- map1 + geom_point(data=lis_location, mapping=aes(longitude, latitude), color = "dimgrey", size=0.05) + ggtitle("Airbnb listings in London") + theme(legend.position = "none")
+map1 <- ggplot() + geom_polygon(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group, fill=group)) + geom_path(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group=group), color="white", lwd=0.1)
+map2 <- map1 + geom_point(data=lis_location, mapping=aes(longitude, latitude), color="dimgrey", size=0.05) + ggtitle("Airbnb listings in London")
+map3 <- map2 + theme(legend.position = "none")
+
+##(11.2) map two: visualise percentage of superhosts on map of london boroughs
+ldn_boroughs.wgs84@data <- left_join(ldn_boroughs.wgs84@data, neig_l_s, by = c("name" = "neighbourhood"))
+ldn_boroughs.wgs84$id <- row.names(ldn_boroughs.wgs84)
+ldn_boroughs_f <- fortify(ldn_boroughs.wgs84)
+ldn_boroughs_f <- left_join(ldn_boroughs_f, ldn_boroughs.wgs84@data, by = "id")
+
+map01 <- ggplot(data = ldn_boroughs_f, aes(long, lat, group=group, fill=perc_superhost.y)) + geom_polygon() + geom_path(colour="white", lwd=0.05) + coord_equal() + scale_fill_gradient2(low = "#BDBDBD",high = "#2196F3", name = "% of superhosts")
+
+map02 <- map01 + theme(legend.position = "none")
+
+
 
 #transform location data to distance to central london
 cent_ldn_lat <- 51.509865
@@ -208,6 +246,12 @@ listings1$mil_to_centre_n <- mil_to_centre_n
 
 [1]  https://toboroughsdatascience.com/plotting-a-map-of-london-crime-data-using-r-8dcefef1c397 the reference for transformation of coordinates to longitude and latitude
 [2]  https://www.latlong.net/place/london-the-uk-14153.html centre of london longitude and latitude
+[3] https://github.com/valeria-io/crime_london_map (11.2) map 2
+
+## code for maps with uniform colours
+map0 <- ggplot() + geom_polygon(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), fill="skyblue2") + geom_path(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), color="white", lwd=0.1)
+map0.1 <- map0 + geom_point(data=lis_location, mapping=aes(longitude, latitude), color = "dimgrey", size=0.05) + ggtitle("Airbnb listings in London") + theme(legend.position = "none")
+##use shape names to represent t/f for superhost 
 
 ## 12. is_location_exact
 ```{r}
@@ -219,7 +263,7 @@ summary(as.factor(listings1$is_location_exact))
 #check price difference among different types (original)
 property_n2 <- listings1$property_type
 prop_o_price <- as.data.frame(cbind(property_n2, listings1$price_n))
-prop_o_price$price_n <- as.numeric(prop_price$V2)
+prop_o_price$price_n <- as.numeric(prop_o_price$V2)
 ggplot(data=prop_o_price, aes(x=factor(property_n2), y=log(price_n)))+geom_boxplot()
 
 #group levels according to common understanding of room types
