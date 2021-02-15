@@ -19,6 +19,7 @@ library(dplyr)
 library(data.table)
 library(tree)
 library(randomForest)
+library(ROCR)
 
 listings1 <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
 listings_o <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
@@ -556,8 +557,74 @@ ct.op <- function(predicted, observed) {
 #remove the two variables that were used to construct is_popular
 glm1 <- glm(is_popular ~. - reviews_per_month - review_scores_rating, family=binomial, data=listings2)
 summary(glm1)
+#set threshold as 0.5
 pred.m1 <- as.numeric(glm1$fitted.values > 0.5) 
-ct.op(pred.m1, listings2$is_popular)
+ct.op(pred.m1, listings2$is_popular) #0.92, 0.45
+
+#remove non-significant variables one by one
+#remove host_verification_n
+glm2 <- glm(is_popular ~. - reviews_per_month - review_scores_rating - host_verification_n, family=binomial, data=listings2)
+anova(glm2, test="Chisq") #test the overall significance of a variable
+#set threshold as 0.5
+pred.m2 <- as.numeric(glm2$fitted.values > 0.5) 
+ct.op(pred.m2, listings2$is_popular) #0.92, 0.45
+
+#remove bed_type_n
+glm3 <- glm(is_popular ~. - reviews_per_month - review_scores_rating - host_verification_n - bed_type_n, family=binomial, data=listings2)
+anova(glm3, test="Chisq")
+#set threshold as 0.5
+pred.m3 <- as.numeric(glm3$fitted.values > 0.5) 
+ct.op(pred.m3, listings2$is_popular) #0.92, 0.45
+
+#remove minimum_nights
+glm4 <- glm(is_popular ~. - reviews_per_month - review_scores_rating - host_verification_n - bed_type_n - minimum_nights, family=binomial, data=listings2)
+anova(glm4, test="Chisq")
+#set threshold as 0.5
+pred.m4 <- as.numeric(glm4$fitted.values > 0.5) 
+ct.op(pred.m4, listings2$is_popular) #0.92, 0.45
+
+#remove log_price_n
+glm5 <- glm(is_popular ~. - reviews_per_month - review_scores_rating - host_verification_n - bed_type_n - minimum_nights - log_price_n, family=binomial, data=listings2)
+anova(glm5, test="Chisq")
+#set threshold as 0.5
+pred.m5 <- as.numeric(glm5$fitted.values > 0.5) 
+ct.op(pred.m5, listings2$is_popular) #0.92, 0.45
+
+#try interaction between most significant ones
+glm6 <- glm(is_popular ~ host_since_n + host_response_time_n + host_response_rate_n + property_type_n + amen_count + cancellation_policy_n + guest_verif_n + room_type + mil_to_centre_n * superhost_n + accommodates, family=binomial, data=listings2)
+anova(glm6, test="Chisq")
+#set threshold as 0.5
+pred.m6 <- as.numeric(glm6$fitted.values > 0.5) 
+ct.op(pred.m6, listings2$is_popular) #0.92, 0.45
+#significant but does not improve on confusion matrix, disregard glm6
+
+#set threshold
+set.seed(101)
+g.train.index <- sample(1:dim(listings2)[1], dim(listings2)[1] * 0.8) #80:20 split
+g.train.dat <- listings2[g.train.index,]
+g.test.dat <- listings2[-g.train.index,]
+
+glm5tr <- glm(is_popular ~ host_since_n + host_response_time_n + host_response_rate_n + property_type_n + amen_count + cancellation_policy_n + guest_verif_n + room_type + mil_to_centre_n + superhost_n + accommodates, data=g.train.dat)
+pred.train <- glm5tr$fitted.values
+
+glm5te <- glm(is_popular ~ host_since_n + host_response_time_n + host_response_rate_n + property_type_n + amen_count + cancellation_policy_n + guest_verif_n + room_type + mil_to_centre_n + superhost_n + accommodates, data=g.test.dat)
+pred.test <- glm5te$fitted.values
+
+prediction.test <- prediction(pred.test, g.test.dat$is_popular)
+prediction.train <- prediction(pred.train, g.train.dat$is_popular)
+
+#
+roc.test <- performance(prediction.test, measure="tpr", x.measure="fpr")
+roc.train <- performance(prediction.train, measure="tpr", x.measure="fpr")
+par(mfrow=c(1,2))
+plot(roc.test, lwd=2, colorkey=T, colorize=T, main="ROC curve on testing data")
+abline(0,1)
+plot(roc.train, lwd=2, colorkey=T, colorize=T, main="ROC curve on training data")
+abline(0,1)
+
+#try glm5, still
+pred.m5t <- as.numeric(glm5$fitted.values > 0.1) 
+ct.op(pred.m5t, listings2$is_popular) #0.92, 0.45
 
 #create a more balanced dataset by having equal numbers of T and F for is_popular
 getBalanceData <- function (dfT, dfF) {
@@ -573,9 +640,10 @@ set.seed(1)
 listings_bal1 <- getBalanceData(listings_T, listings_F)
 
 glm_bal1 <- glm(is_popular ~. - reviews_per_month - review_scores_rating, family = binomial, data = listings_bal1)
-summary(glm_bal1)
+anova(glm_bal1, test="Chisq")
 pred.m <- as.numeric(glm_bal1$fitted.values > 0.5) 
-ct.op(pred.m, listings_bal1$is_popular)
+ct.op(pred.m, listings_bal1$is_popular) #0.81, 0.64
+
 ```
 
 ## 3. Model2 - decision tree - popular
