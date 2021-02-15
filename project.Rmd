@@ -17,6 +17,7 @@ library(stringr)
 library(rgdal)
 library(dplyr)
 library(data.table)
+library(tree)
 
 listings1 <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
 listings_o <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
@@ -285,7 +286,7 @@ prop_price$price_n <- as.numeric(prop_price$V2)
 ggplot(data=prop_price, aes(x=factor(property_n), y=log(price_n)))+geom_boxplot()
 mean(prop_price$price[prop_price$property_n == "Apartment"])
 
-listings1$property_type_n <- property_n
+listings1$property_type_n <- as.factor(property_n)
 ```
 
 ## 14. room types
@@ -474,17 +475,40 @@ listings1$guest_verif_n <- as.factor(guest_verif$any_form)
 628-557 require only phone
 999-557 require only profile pic
 
+## 19. response variable
+```{r}
+#check no. of reviews
+summary(listings1$reviews_per_month) #median= 0.9
+hist(listings1$reviews_per_month)
+length(which(listings1$reviews_per_month > 0.9)) #25602
+
+#check review score
+hist(listings2$review_scores_rating, breaks = 50)
+summary(listings2$review_scores_rating) #median = 95
+length(which(listings2$review_scores_rating > 95)) #25298
+
+popular.dat <- as.data.frame(cbind(listings1$reviews_per_month, listings1$review_scores_rating))
+popT.index <- which(popular.dat$V1 > 0.9 & popular.dat$V2 > 95)
+popular.dat$is_popular[popT.index] <- T
+popular.dat$is_popular[-popT.index] <- F
+
+listings1$is_popular <- popular.dat$is_popular
+```
+
 
 # II. Data Analysis
 
-## 1. model with all relevant variables
+## 1. subset data with all relevant variables
 
 ```{r}
 #subset to include only the relevant ones
 colnames(listings1)
-relevant_col = c("price_n", "host_since_n", "host_response_time_n", "host_response_rate_n", "host_verification_n", "mil_to_centre_n", "property_type_n", "bed_type_n", "amen_count", "cancellation_policy_n", "guest_verif_n", "room_type", "superhost_n", "accommodates","minimum_nights", "reviews_per_month", "review_scores_rating")
+relevant_col = c("price_n", "host_since_n", "host_response_time_n", "host_response_rate_n", "host_verification_n", "mil_to_centre_n", "property_type_n", "bed_type_n", "amen_count", "cancellation_policy_n", "guest_verif_n", "room_type", "superhost_n", "accommodates","minimum_nights", "reviews_per_month", "review_scores_rating", "is_popular")
 listings2 <- listings1[,relevant_col]
 summary(listings2)
+#remove two rows with NA in reviews_per_month
+listings2 <- listings2[complete.cases(listings2),]
+
 ```
 
 Response variable: host_is_superhost
@@ -508,48 +532,67 @@ Select one variable to represent similar variables:
 6. reviews rating {review_scores_rating: review_scores_rating, review_scores_accuracy, review_scores_cleanliness, review_scores_checkin, review_scores_communication, review_scores_location, review_scores_value}
 6. guest verif {guest_verif_n: require_guest_profile_picture,  require_guest_phone_verification}
 
+
+
+## 2. Model1 - glm popular
+
 ```{r}
-logi.m1 <- glm(superhost_n~., family = binomial(link = "logit"), data = listings2)
-summary(logi.m1)
+#create a confusion matrix
 ct.op <- function(predicted, observed) {
   df.op <- data.frame(predicted = predicted, observed = observed)
-  # create a table
   op.tab <- table(df.op)
-  1
-  # use the prop.table function to obtain the rows we need and stack them on
-  # top of each other with rbind
   op.tab <- rbind(op.tab, c(round(prop.table(op.tab, 2)[1, 1], 2), round((prop.table(op.tab, 2)[2, 2]), 2)))
-  # name the rows
-  rownames(op.tab) <- c("pred=0", "pred=1", "%corr")
-  # name the columns
-  colnames(op.tab) <- c("obs=0", "obs=1")
-  # return the table
+  rownames(op.tab) <- c("pred=F", "pred=T", "%corr")
+  colnames(op.tab) <- c("obs=F", "obs=T")
   op.tab
 }
 
+#remove the two variables that were used to construct is_popular
+glm1 <- glm(is_popular ~. - reviews_per_month - review_scores_rating, family=binomial, data=listings2)
+summary(glm1)
+pred.m1 <- as.numeric(glm1$fitted.values > 0.5) 
+ct.op(pred.m1, listings2$is_popular)
 
-pred.pk<-as.numeric(logi.m1$fitted.values>0.5)
-which(is.na(listings2$reviews_per_month)) #
-
-#pass the fitted values and the observed values to ct.op
-ct.op(pred.pk,listings2$superhost_n[-c(14100, 22677)])
+#create a more balanced dataset by having equal numbers of T and F for is_popular
+listings_T <- listings2[listings2$is_popular == T,]
+listings_F <- listings2[listings2$is_popular == F,]
+Fsam_index <- sample(dim(listings_F)[1], size = dim(listings_T)[1])
+listings_Fsam <- listings_F[Fsam_index,]
+listings_bal <- rbind(listings_T, listings_Fsam)
+glm2 <- glm(is_popular ~. - reviews_per_month - review_scores_rating, family = binomial(link = "logit"), data = listings_bal)
+summary(glm2)
+pred.m <- as.numeric(glm2$fitted.values > 0.5) 
+ct.op(pred.m, listings_bal$is_popular)
 ```
 
-too many signals for non superhost but too few for superhosts?
+## 3. Model2 - decision tree - popular
 
-```{r }
-# summary(listings2$superhost_n)
-# listings_T <- listings2[superhost_n == T,]
-# listings_F <- listings2[superhost_n == F,]
-# Fsam_index <- sample(dim(listings_F)[1], size = dim(listings_F)[1])
-# listings_Fsam <- listings_F[Fsam_index,]
-# 
-# listings_bal <- rbind(listings_T, listings_Fsam)
-# 
-# logi.m2 <- glm(superhost_n~., family = binomial(link = "logit"), data = listings_bal)
-# summary(logi.m2)
-# 
-# pred.m2<-as.numeric(logi.m2$fitted.values>0.5)
-# ct.op(pred.m2,listings2$superhost_n)
+```{r}
+#remove two variables used to construct is_popular
+listings_dt <- subset(listings2, select=-c(reviews_per_month, review_scores_rating))
+
+tree.pop1 <- tree(as.factor(is_popular) ~., data=listings_dt)
+summary(tree.pop1)
+plot(tree.pop1)
+text(tree.pop1, pretty=0, cex=0.6)
+
+#assess perfomance of tree.pop1 on new data
+nrow(listings_bal) * 0.8
+set.seed(1)
+train.index=sample(1:nrow(listings_bal), 18722) #80% of original data used for training
+train.dat <- listings_bal[train.index,]
+test.dat <- listings_bal[-train.index,]
+popular_test <- listings_bal$is_popular[-train.index]
+tree.pop2 <- tree(as.factor(is_popular) ~. - reviews_per_month - review_scores_rating, data=train.dat)
+tree.pop2.predict <- predict(tree.pop2, test.dat, type="class")
+tree.test.conf <- table(tree.pop2.predict, popular_test)
+
+summary(tree.sup3) #misclassification = 0.3479
+plot(tree.sup3) 
+text(tree.sup3, pretty=0, cex=0.6)
 ```
+
+
+
+
 
