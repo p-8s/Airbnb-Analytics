@@ -18,6 +18,7 @@ library(rgdal)
 library(dplyr)
 library(data.table)
 library(tree)
+library(randomForest)
 
 listings1 <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
 listings_o <- read_excel("9Dec2019_PriceAmenitiesRatings.xlsx")
@@ -28,14 +29,17 @@ summary(listings1)
 ```{r}
 
 # Standardise all cleaning_fee such that entries with "NA" are 0 
-listings1$cleaning_fee[is.na(listings1$cleaning_fee)]=0
+listings1$cleaning_fee[is.na(listings1$cleaning_fee)] <- 0
 
 # Add a new column with normalised prices (pro-rata per person for a 3-day stay)
 # this is to account for the cleaning_fee, which can be substantial
 listings1$price_n <- with(listings1,(price*3 + cleaning_fee)/3/guests_included)
 
-
-
+summary(listings1$price_n)
+#the skewness in price_n is too extreme, apply log(price_n + 1) transformaiton
+listings1$price_n <- log(listings1$price_n + 1)
+#rename column
+listings1 <- listings1 %>% rename(log_price_n =price_n)
 ```
 
 ## 3. host_since
@@ -268,7 +272,7 @@ summary(as.factor(listings1$is_location_exact))
 ```{r}
 #check price difference among different types (original)
 property_n2 <- listings1$property_type
-prop_o_price <- as.data.frame(cbind(property_n2, listings1$price_n))
+prop_o_price <- as.data.frame(cbind(property_n2, listings1$price))
 prop_o_price$price_n <- as.numeric(prop_o_price$V2)
 ggplot(data=prop_o_price, aes(x=factor(property_n2), y=log(price_n)))+geom_boxplot()
 
@@ -281,9 +285,9 @@ property_n[property_n == "Villa"] <- "Condominium"
 property_n[property_n != "Apartment" & property_n != "House" & property_n != "Condominium"] <- "Others"
 
 #check price difference among different types
-prop_price <- as.data.frame(cbind(property_n, listings1$price_n))
-prop_price$price_n <- as.numeric(prop_price$V2)
-ggplot(data=prop_price, aes(x=factor(property_n), y=log(price_n)))+geom_boxplot()
+prop_price <- as.data.frame(cbind(property_n, listings1$price))
+prop_price$price <- as.numeric(prop_price$V2)
+ggplot(data=prop_price, aes(x=factor(property_n), y=log(price)))+geom_boxplot()
 mean(prop_price$price[prop_price$property_n == "Apartment"])
 
 listings1$property_type_n <- as.factor(property_n)
@@ -483,9 +487,9 @@ hist(listings1$reviews_per_month)
 length(which(listings1$reviews_per_month > 0.9)) #25602
 
 #check review score
-hist(listings2$review_scores_rating, breaks = 50)
-summary(listings2$review_scores_rating) #median = 95
-length(which(listings2$review_scores_rating > 95)) #25298
+hist(listings1$review_scores_rating, breaks = 50)
+summary(listings1$review_scores_rating) #median = 95
+length(which(listings1$review_scores_rating > 95)) #25298
 
 popular.dat <- as.data.frame(cbind(listings1$reviews_per_month, listings1$review_scores_rating))
 popT.index <- which(popular.dat$V1 > 0.9 & popular.dat$V2 > 95)
@@ -498,17 +502,16 @@ listings1$is_popular <- popular.dat$is_popular
 
 # II. Data Analysis
 
-## 1. subset data with all relevant variables
+## 1. Preparing data
 
 ```{r}
 #subset to include only the relevant ones
 colnames(listings1)
-relevant_col = c("price_n", "host_since_n", "host_response_time_n", "host_response_rate_n", "host_verification_n", "mil_to_centre_n", "property_type_n", "bed_type_n", "amen_count", "cancellation_policy_n", "guest_verif_n", "room_type", "superhost_n", "accommodates","minimum_nights", "reviews_per_month", "review_scores_rating", "is_popular")
+relevant_col = c("log_price_n", "host_since_n", "host_response_time_n", "host_response_rate_n", "host_verification_n", "mil_to_centre_n", "property_type_n", "bed_type_n", "amen_count", "cancellation_policy_n", "guest_verif_n", "room_type", "superhost_n", "accommodates","minimum_nights", "reviews_per_month", "review_scores_rating", "is_popular")
 listings2 <- listings1[,relevant_col]
 summary(listings2)
 #remove two rows with NA in reviews_per_month
 listings2 <- listings2[complete.cases(listings2),]
-
 ```
 
 Response variable: host_is_superhost
@@ -532,6 +535,9 @@ Select one variable to represent similar variables:
 6. reviews rating {review_scores_rating: review_scores_rating, review_scores_accuracy, review_scores_cleanliness, review_scores_checkin, review_scores_communication, review_scores_location, review_scores_value}
 6. guest verif {guest_verif_n: require_guest_profile_picture,  require_guest_phone_verification}
 
+Transformation needed for any variables?
+
+- Some variables appear to have heavy tails (or outliers) in comparing with normal distributions, as they minimum and maximum values are way out of the ranges of mean ±2×SDT. [copied from solution 6]. As applying normalisation or standardisation may make interpretation harder and disrupt the natural dependency structure within data, we prefer to leave variables to its original form.
 
 
 ## 2. Model1 - glm popular
@@ -554,15 +560,22 @@ pred.m1 <- as.numeric(glm1$fitted.values > 0.5)
 ct.op(pred.m1, listings2$is_popular)
 
 #create a more balanced dataset by having equal numbers of T and F for is_popular
+getBalanceData <- function (dfT, dfF) {
+  Fsam_index <- sample(dim(dfF)[1], size = dim(dfT)[1])
+  df_Fsam <- dfF[Fsam_index,]
+  df_bal <- rbind(dfT, df_Fsam)
+  return(df_bal)
+}
+
 listings_T <- listings2[listings2$is_popular == T,]
 listings_F <- listings2[listings2$is_popular == F,]
-Fsam_index <- sample(dim(listings_F)[1], size = dim(listings_T)[1])
-listings_Fsam <- listings_F[Fsam_index,]
-listings_bal <- rbind(listings_T, listings_Fsam)
-glm2 <- glm(is_popular ~. - reviews_per_month - review_scores_rating, family = binomial(link = "logit"), data = listings_bal)
-summary(glm2)
-pred.m <- as.numeric(glm2$fitted.values > 0.5) 
-ct.op(pred.m, listings_bal$is_popular)
+set.seed(1)
+listings_bal1 <- getBalanceData(listings_T, listings_F)
+
+glm_bal1 <- glm(is_popular ~. - reviews_per_month - review_scores_rating, family = binomial, data = listings_bal1)
+summary(glm_bal1)
+pred.m <- as.numeric(glm_bal1$fitted.values > 0.5) 
+ct.op(pred.m, listings_bal1$is_popular)
 ```
 
 ## 3. Model2 - decision tree - popular
@@ -571,25 +584,31 @@ ct.op(pred.m, listings_bal$is_popular)
 #remove two variables used to construct is_popular
 listings_dt <- subset(listings2, select=-c(reviews_per_month, review_scores_rating))
 
+set.seed(12)
 tree.pop1 <- tree(as.factor(is_popular) ~., data=listings_dt)
-summary(tree.pop1)
+summary(tree.pop1) #mis = 0.189
 plot(tree.pop1)
 text(tree.pop1, pretty=0, cex=0.6)
 
-#assess perfomance of tree.pop1 on new data
-nrow(listings_bal) * 0.8
-set.seed(1)
-train.index=sample(1:nrow(listings_bal), 18722) #80% of original data used for training
-train.dat <- listings_bal[train.index,]
-test.dat <- listings_bal[-train.index,]
-popular_test <- listings_bal$is_popular[-train.index]
-tree.pop2 <- tree(as.factor(is_popular) ~. - reviews_per_month - review_scores_rating, data=train.dat)
+#assess perfomance - 80:20 split for training and testing
+nrow(listings_dt) * 0.8
+set.seed(14)
+train.index=sample(1:nrow(listings_dt), 41188) #80% of original data used for training
+train.dat <- listings_dt[train.index,]
+test.dat <- listings_dt[-train.index,]
+popular_test <- test.dat$is_popular
+tree.pop2 <- tree(as.factor(is_popular) ~., data=train.dat)
+summary(tree.pop2) #mis = 0.1882
+plot(tree.pop2) 
+text(tree.pop2, pretty=0, cex=0.6)
 tree.pop2.predict <- predict(tree.pop2, test.dat, type="class")
-tree.test.conf <- table(tree.pop2.predict, popular_test)
+tree.test.conf <- table(tree.pop2.predict, popular_test) 
+(tree.test.conf[2,1] + tree.test.conf[1,2]) / nrow(test.dat) #mis = 0.193
 
-summary(tree.sup3) #misclassification = 0.3479
-plot(tree.sup3) 
-text(tree.sup3, pretty=0, cex=0.6)
+#improve decision tree: bagging
+#bag.pop <- randomForest(is_popular~.)
+
+
 ```
 
 
