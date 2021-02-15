@@ -604,14 +604,90 @@ text(tree.pop2, pretty=0, cex=0.6)
 tree.pop2.predict <- predict(tree.pop2, test.dat, type="class")
 tree.test.conf <- table(tree.pop2.predict, popular_test) 
 (tree.test.conf[2,1] + tree.test.conf[1,2]) / nrow(test.dat) #mis = 0.193
+#poor performance on predicting T
 
 #improve decision tree: bagging
-#bag.pop <- randomForest(is_popular~.)
+dim(listings_dt)
+#! Caution: bagging takes more than 7 min to run, check below for results
+# bag.pop <- randomForest(as.factor(is_popular)~., data=listings_dt, subset=train.index, mtry=15, importance=T) #mtry=15 uses all predictor in the dataset
+# importance(bag.pop)
 
+#improve decision tree: randomForest
+#! Caution: it takes a bit of time to run
+# rf.pop <- randomForest(as.factor(is_popular)~., data=listings_dt, subset=train.index, mtry=4, importance=T) #mtry sets m=4 close to sqrt(p=15)
+# importance(rf.pop)
 
+#cross validation to determine the tree size
+cv.pop <- cv.tree(tree.pop1, FUN=prune.misclass)
+cv.pop$size
+cv.pop$dev
+#pop1 is indeed the cv selected tree
+```
+
+! results for bagging: 
+
+Call:
+ randomForest(formula = as.factor(is_popular) ~ ., data = listings_dt,      mtry = 15, importance = T, subset = train.index) 
+               Type of random forest: classification
+                     Number of trees: 500
+No. of variables tried at each split: 15
+
+        OOB estimate of  error rate: 18.65%
+Confusion matrix:
+      FALSE TRUE class.error
+FALSE 29417 2479  0.07772134
+TRUE   5203 4089  0.55994404
+
+! results for random forest
+
+Call:
+ randomForest(formula = as.factor(is_popular) ~ ., data = listings_dt,      mtry = 4, importance = T, subset = train.index) 
+               Type of random forest: classification
+                     Number of trees: 500
+No. of variables tried at each split: 4
+
+        OOB estimate of  error rate: 18.1%
+Confusion matrix:
+      FALSE TRUE class.error
+FALSE 29637 2259  0.07082393
+TRUE   5197 4095  0.55929832
+
+- bagging and rf suggests the decision tree cant be further improved
+
+```{r}
+#use a more balanced dataset to fit deicion tree
+listings_dt_T <- listings_dt[which(listings_dt$is_popular == T),]
+listings_dt_F <- listings_dt[which(listings_dt$is_popular == F),]
+set.seed(16)
+listings_dt_bal1 <- getBalanceData(listings_dt_T, listings_dt_F)
+
+tree.bal1 <- tree(is_popular ~., data=listings_dt_bal1)
+summary(tree.bal1) #mis = 0.189
+plot(tree.bal1)
+text(tree.bal1, pretty=0, cex=0.6)
+
+set.seed(18)
+train.bal1.index=sample(1:nrow(listings_dt_bal1), nrow(listings_dt_bal1) * 0.8) #80% of original data used for train.bal1
+train.bal1.dat <- listings_dt_bal1[train.bal1.index,]
+test.bal1.dat <- listings_dt_bal1[-train.bal1.index,]
+popular_test.bal1 <- test.bal1.dat$is_popular
+tree.bal2 <- tree(as.factor(is_popular) ~., data=train.bal1.dat)
+summary(tree.bal2) #mis = 0.2964
+plot(tree.bal2) 
+text(tree.bal2, pretty=0, cex=0.6)
+tree.bal2.predict <- predict(tree.bal2, test.bal1.dat, type="class")
+tree.test.bal1.conf <- table(tree.bal2.predict, popular_test.bal1) 
+(tree.test.bal1.conf[2,1] + tree.test.bal1.conf[1,2]) / nrow(test.bal1.dat) #mis = 0.285
+
+#the balanced dataset does not bring a better decision tree.
 ```
 
 
+## 4. Model3 - mlr
+```{r}
+lm.p <- lm(log_price_n ~ ., data=listings2)
+summary(lm.p)
 
-
-
+lm.p <- lm(log_price_n ~ mil_to_centre_n + room_type, data=listings2)
+summary(lm.p)
+```
