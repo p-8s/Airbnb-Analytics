@@ -613,7 +613,6 @@ pred.test <- glm5te$fitted.values
 prediction.test <- prediction(pred.test, g.test.dat$is_popular)
 prediction.train <- prediction(pred.train, g.train.dat$is_popular)
 
-#
 roc.test <- performance(prediction.test, measure="tpr", x.measure="fpr")
 roc.train <- performance(prediction.train, measure="tpr", x.measure="fpr")
 par(mfrow=c(1,2))
@@ -623,10 +622,12 @@ plot(roc.train, lwd=2, colorkey=T, colorize=T, main="ROC curve on training data"
 abline(0,1)
 
 #try glm5, still
-pred.m5t <- as.numeric(glm5$fitted.values > 0.1) 
-ct.op(pred.m5t, listings2$is_popular) #0.92, 0.45
+pred.m5t <- as.numeric(glm5$fitted.values > 0.45) 
+ct.op(pred.m5t, listings2$is_popular) #0.91, 0.47
 
-#create a more balanced dataset by having equal numbers of T and F for is_popular
+```
+
+create a more balanced dataset by having equal numbers of T and F for is_popular
 getBalanceData <- function (dfT, dfF) {
   Fsam_index <- sample(dim(dfF)[1], size = dim(dfT)[1])
   df_Fsam <- dfF[Fsam_index,]
@@ -644,7 +645,7 @@ anova(glm_bal1, test="Chisq")
 pred.m <- as.numeric(glm_bal1$fitted.values > 0.5) 
 ct.op(pred.m, listings_bal1$is_popular) #0.81, 0.64
 
-```
+
 
 ## 3. Model2 - decision tree - popular
 
@@ -683,7 +684,9 @@ dim(listings_dt)
 #improve decision tree: randomForest
 #! Caution: it takes a bit of time to run
 # rf.pop <- randomForest(as.factor(is_popular)~., data=listings_dt, subset=train.index, mtry=4, importance=T) #mtry sets m=4 close to sqrt(p=15)
-# importance(rf.pop)
+# rf.pop
+# importance(rf.pop) #mis=0.181
+# varImpPlot(rf.pop, col=c("blue", "red"))
 
 #cross validation to determine the tree size
 cv.pop <- cv.tree(tree.pop1, FUN=prune.misclass)
@@ -753,8 +756,9 @@ tree.test.bal1.conf <- table(tree.bal2.predict, popular_test.bal1)
 
 ## 4. Model3 - mlr
 ```{r}
-lm.p <- lm(log_price_n ~ ., data=listings2)
-summary(lm.p)
+lm.p0 <- lm(review_per_month ~ ., data=listings2)
+summary(lm.p0)
+vif(lm.p0)
 
 lm.p <- lm(log_price_n ~ mil_to_centre_n + room_type, data=listings2)
 summary(lm.p)

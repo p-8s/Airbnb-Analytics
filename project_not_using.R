@@ -2,7 +2,6 @@ library(tidyverse)
 library(car)
 library(ggplot)
 library(readxl)
-
 library(ggmap)
 
 listings <- read_excel("9_Dec_2019_Listings.xlsx")
