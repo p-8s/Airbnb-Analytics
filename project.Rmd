@@ -43,6 +43,30 @@ listings1$price_n <- log(listings1$price_n + 1)
 listings1 <- listings1 %>% rename(log_price_n =price_n)
 ```
 
+
+## [19]. response variable
+```{r}
+#check no. of reviews
+summary(listings1$reviews_per_month) #median= 0.9
+hist(listings1$reviews_per_month)
+length(which(listings1$reviews_per_month > 0.9)) #25602
+
+#check review score
+hist(listings1$review_scores_rating, breaks = 50)
+summary(listings1$review_scores_rating) #median = 95
+length(which(listings1$review_scores_rating > 95)) #25298
+
+popular.dat <- as.data.frame(cbind(listings1$reviews_per_month, listings1$review_scores_rating))
+popT.index <- which(popular.dat$V1 > 0.9 & popular.dat$V2 > 95)
+popular.dat$is_popular[popT.index] <- T
+popular.dat$is_popular[-popT.index] <- F
+
+listings1$is_popular <- popular.dat$is_popular
+```
+
+moved here because i need to merge is_popular with amenities data
+
+
 ## 3. host_since
 ```{r}
 #host_since 
@@ -263,6 +287,26 @@ listings1$mil_to_centre_n <- mil_to_centre_n
 map0 <- ggplot() + geom_polygon(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), fill="skyblue2") + geom_path(data=ldn_boroughs.wgs84, mapping=aes(long, lat, group = group), color="white", lwd=0.1)
 map0.1 <- map0 + geom_point(data=lis_location, mapping=aes(longitude, latitude), color = "dimgrey", size=0.05) + ggtitle("Airbnb listings in London") + theme(legend.position = "none")
 
+## 11*. Price map
+
+```{r}
+price_neig <- as.data.frame(cbind(listings1$price, listings1$neighbourhood_cleansed))
+colnames(price_neig) <- c("price", "neighbourhood")
+price_neig$price <- as.numeric(price_neig$price)
+mean_price_neig <- price_neig %>%
+   group_by(neighbourhood) %>%
+   summarise_at(vars(price), list(mean_price = mean))
+
+#merge shapefile data with borough name data and price data
+ldn_boroughs.wgs84@data <- left_join(ldn_boroughs.wgs84@data, mean_price_neig, by=c("NAME" = "neighbourhood"))
+ldn_boroughs_f2 <- fortify(ldn_boroughs.wgs84)
+ldn_boroughs_m2 <- left_join(ldn_boroughs_f, ldn_boroughs.wgs84@data, by = "id")
+
+map_p1 <- ggplot() + geom_polygon(data=ldn_boroughs_m2, mapping=aes(long, lat, group=`NAME`, fill=`mean_price`)) + geom_path(color="white", lwd=0.1) + coord_equal() + scale_fill_gradient(high="#132B43", low="#56B1F7", name = "mean price")
+map_p2 <- map_p1 + geom_text(data=polygon_label.dat, mapping=aes(x=long, y=lat, label=NAME), size=3, color="white") + ggtitle("Listing Price in London Boroughs")
+
+```
+
 
 ## 12. is_location_exact
 ```{r}
@@ -333,11 +377,6 @@ hist(total_amenities,
      xlab = "Number of amenities",
      ylab = "Number of listings")
 
-#check relationship between no. of total amenities and host_is_superhost
-total_sup <- as.data.frame(cbind(total_amenities, listings1$host_is_superhost))
-total_sup$total_amenities <- as.numeric(total_sup$total_amenities)
-total_sup$V2 <- as.factor(total_sup$V2)
-boxplot(total_sup$total_amenities ~ total_sup$V2)
 
 #find all possible items provided
 raw_items <- getAllMethods(a_clean_list)
@@ -432,6 +471,24 @@ t.test(top30_count ~ is_superhost, data = top30_sup)
 
 #add new column to listings1
 listings1$amen_count <- total_amenities
+
+
+
+#top 20 amenities for popular listings
+popT_clean_list <- a_clean_list[popT.index]
+popT_item_freq <- getMethodFreq(popT_clean_list, raw_items)
+popT_item_freq <- as.data.frame(popT_item_freq)
+popT_item_freq <- rownames_to_column(popT_item_freq, "item")
+popT_item_freq <- popT_item_freq[order(popT_item_freq$freq, decreasing = T),]
+popT_top20 <- popT_item_freq[1:20,]
+
+#top 20 amenities for non-popular listings
+popF_clean_list <- a_clean_list[-popT.index]
+popF_item_freq <- getMethodFreq(popF_clean_list, raw_items)
+popF_item_freq <- as.data.frame(popF_item_freq)
+popF_item_freq <- rownames_to_column(popF_item_freq, "item")
+popF_item_freq <- popF_item_freq[order(popF_item_freq$freq, decreasing = T),]
+popF_top20 <- popF_item_freq[1:20,]
 ```
 
 conclusion 1: the ten most frequently appeared amenities for listings on Airbnb:
@@ -480,25 +537,6 @@ listings1$guest_verif_n <- as.factor(guest_verif$any_form)
 628-557 require only phone
 999-557 require only profile pic
 
-## 19. response variable
-```{r}
-#check no. of reviews
-summary(listings1$reviews_per_month) #median= 0.9
-hist(listings1$reviews_per_month)
-length(which(listings1$reviews_per_month > 0.9)) #25602
-
-#check review score
-hist(listings1$review_scores_rating, breaks = 50)
-summary(listings1$review_scores_rating) #median = 95
-length(which(listings1$review_scores_rating > 95)) #25298
-
-popular.dat <- as.data.frame(cbind(listings1$reviews_per_month, listings1$review_scores_rating))
-popT.index <- which(popular.dat$V1 > 0.9 & popular.dat$V2 > 95)
-popular.dat$is_popular[popT.index] <- T
-popular.dat$is_popular[-popT.index] <- F
-
-listings1$is_popular <- popular.dat$is_popular
-```
 
 
 # II. Data Analysis
