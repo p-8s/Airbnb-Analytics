@@ -1,7 +1,7 @@
 ---
-title: "ST309_Project"
-author: "Paxton Quek, Patricia Yin"
-date: "02/02/2021"
+title: "ST309 Group Project Report: Analytics of Airbnb"
+authors: "15702, 18196"
+date: "18 Feb 2021"
 output: pdf_document
 ---
 
@@ -30,7 +30,7 @@ listings_o <- read_excel("listings1.xlsx")
 ```
 
 
-## 2.3 Removing Rows (Listings)
+## 2.2 Removing Rows (Listings)
 There are records where host-related data is missing, but we managed to find these hosts via their id's. We believe this to be due to an error during the scraping process, so we will remove the records with incomplete information. To further reduce the amount of records 
 for computational reasons, we restricted ourselves to listings that allow short-term
 stays as well. We are left with 39178 observations out of the original 86469.
@@ -62,7 +62,7 @@ listings1 <- listings1[listings1$minimum_nights<=3,]
 ```
 
 
-## 2.3 Initial Transformations: Price
+## 2.3 Initial Transformations
 We transformed and normalised our listing prices as the expected price of a 3 day stay per person, because cleaning fees can significantly increase the tru price of listings. 
 ```{r}
 # Price transformation
@@ -104,12 +104,12 @@ listings1$host_response_time_n <- host_response_time_n
 #### host_response_rate
 A factor dummy variable representing if hosts have a 100% response rate.
 ```{r}
-host_response_rate <- as.numeric(listings1$host_response_rate)
-hist(host_response_rate)
-summary(host_response_rate)
+host_response_rate_n <- as.numeric(listings1$host_response_rate)
+hist(host_response_rate_n)
+summary(host_response_rate_n)
 #recode the variable as factor: 100% is one level, not 100% another
-host_response_rate_n[host_response_rate != 1] <- "Not100"
-host_response_rate_n[host_response_rate == 1] <- "100"
+host_response_rate_n[host_response_rate_n != 1] <- "Not100"
+host_response_rate_n[host_response_rate_n == 1] <- "100"
 host_response_rate_n <- as.factor(host_response_rate_n)
 listings1$host_response_rate_n <- host_response_rate_n
 ```
@@ -266,6 +266,28 @@ summary(mil_to_centre_n)
 listings1$mil_to_centre_n <- mil_to_centre_n
 ```
 
+## Price Map
+
+```{r}
+price_neig <- as.data.frame(cbind(listings1$price, listings1$neighbourhood_cleansed))
+colnames(price_neig) <- c("price", "neighbourhood")
+price_neig$price <- as.numeric(price_neig$price)
+mean_price_neig <- price_neig %>%
+   group_by(neighbourhood) %>%
+   summarise_at(vars(price), list(mean_price = mean))
+
+#merge shapefile data with borough name data and price data
+ldn_boroughs.wgs84@data <- left_join(ldn_boroughs.wgs84@data, mean_price_neig, by=c("NAME" = "neighbourhood"))
+ldn_boroughs_f2 <- fortify(ldn_boroughs.wgs84)
+ldn_boroughs_m2 <- left_join(ldn_boroughs_f, ldn_boroughs.wgs84@data, by = "id")
+
+map_p1 <- ggplot() + geom_polygon(data=ldn_boroughs_m2, mapping=aes(long, lat, group=`NAME`, fill=`mean_price`)) + geom_path(color="white", lwd=0.1) + coord_equal() + scale_fill_gradient(high="#132B43", low="#56B1F7", name = "mean price")
+map_p2 <- map_p1 + geom_text(data=polygon_label.dat, mapping=aes(x=long, y=lat, label=NAME), size=3, color="white") + ggtitle("Listing Price in London Boroughs")
+
+map_p2
+
+```
+
 [1]  https://toboroughsdatascience.com/plotting-a-map-of-london-crime-data-using-r-8dcefef1c397 the reference for transformation of coordinates to longitude and latitude
 [2]  https://www.latlong.net/place/london-the-uk-14153.html centre of london longitude and latitude
 [3] https://github.com/valeria-io/crime_london_map (11.2) map 1
@@ -300,7 +322,6 @@ ggplot(data=prop_price, aes(x=factor(property_n), y=price))+geom_boxplot()
 
 mean(prop_price$price[prop_price$property_n == "Apartment"])
 mean(prop_price$price[prop_price$property_n == "Condominium"])
-mean(prop_)
 
 listings1$property_type_n <- as.factor(property_n)
 ```
@@ -324,7 +345,7 @@ summary(as.factor(bed_type_n))
 listings1$bed_type_n <- as.factor(bed_type_n)
 ```
 
-## 3.4 Amenities
+## 3.4 Amenities Data
 
 ```{r}
 amenities_n <- listings1$amenities
@@ -598,7 +619,7 @@ pred.m5 <- as.numeric(glm5$fitted.values > 0.5)
 ct.op(pred.m5, listings2$is_popular)
 
 #try interaction between most significant ones
-glm6 <- glm(is_popular ~ host_since_n + host_response_time_n + host_response_rate_n + property_type_n + amen_count + cancellation_policy_n + guest_verif_n + room_type + mil_to_centre_n * superhost_n + accommodates, family=binomial, data=listings2)
+glm6 <- glm(is_popular ~ host_since_n + host_response_time_n + host_response_rate_n + property_type_n + amen_count + cancellation_policy_n + guest_verif_n + room_type + mil_to_centre_n * superhost_n, family=binomial, data=listings2)
 anova(glm6, test="Chisq")
 #set threshold as 0.5
 pred.m6 <- as.numeric(glm6$fitted.values > 0.5) 
@@ -715,6 +736,13 @@ TRUE   5197 4095  0.55929832
 
 ```{r}
 #use a more balanced dataset to fit deicion tree
+getBalanceData <- function (dfT, dfF) {
+  Fsam_index <- sample(dim(dfF)[1], size = dim(dfT)[1])
+  df_Fsam <- dfF[Fsam_index,]
+  df_bal <- rbind(dfT, df_Fsam)
+  return(df_bal)
+}
+
 listings_dt_T <- listings_dt[which(listings_dt$is_popular == T),]
 listings_dt_F <- listings_dt[which(listings_dt$is_popular == F),]
 set.seed(16)
@@ -741,18 +769,7 @@ tree.test.bal1.conf <- table(tree.bal2.predict, popular_test.bal1)
 #the balanced dataset does not bring a better decision tree.
 ```
 
-
-## 4.3 Data Analysis with MLR
-```{r}
-lm.p0 <- lm(review_per_month ~ ., data=listings2)
-summary(lm.p0)
-vif(lm.p0)
-
-lm.p <- lm(log_price_n ~ mil_to_centre_n + room_type, data=listings2)
-summary(lm.p)
-```
-
-## 4.4 Data Analysis with Text
+## 4.3 Data Analysis with Text
 ```{r}
 data(stop_words)
 
@@ -870,4 +887,3 @@ pop_topwords_host_about %>% wordcloud2
 Npop_topwords_host_about
 Npop_topwords_host_about %>% wordcloud2
 ```
-
