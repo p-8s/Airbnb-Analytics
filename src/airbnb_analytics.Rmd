@@ -27,9 +27,10 @@ library(wordcloud2)
 listings1 <- read_excel("../data/listings1.xlsx")
 
 # Load the shapefile of london boroughs (for price map)
-ldn_boroughs <- readOGR(dsn = "../data/London-boroughs/London_Borough_Excluding_MHW.shp") #the whole london-boroughs folder must be downloaded because .shp (shapefile) is composed by different files in the folder.
+ldn_boroughs <- readOGR(dsn = "../data/London-boroughs/London_Borough_Excluding_MHW.shp") 
 ```
 
+Note that the whole london-boroughs folder must be downloaded because .shp (shapefile) is composed by different files in the folder.
 
 ## 2. Data Cleansing
 
