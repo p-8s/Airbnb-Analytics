@@ -1,6 +1,6 @@
 # Analytics of Airbnb
 
-This repository contains our team's data analytics project on Airbnb listings.
+This repository contains our data analytics project on Airbnb listings.
 
 ## The Problem 
 
