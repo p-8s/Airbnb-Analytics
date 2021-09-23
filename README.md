@@ -1,4 +1,4 @@
-# Analytics of Airbnb
+# Business Analytics - the Case Study of Airbnb
 
 This repository contains our data analytics project on Airbnb listings.
 
